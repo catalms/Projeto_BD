@@ -201,6 +201,7 @@ def product_register():
     return render_template("products/register.html")
 
 @app.route("/products/<product_sku>/update", methods=("GET", "POST"))
+@app.route("/products/<product_sku>/update", methods=("GET", "POST"))
 def product_update(product_sku):
     """Update product description and price"""
 
@@ -208,9 +209,9 @@ def product_update(product_sku):
         with conn.cursor(row_factory=namedtuple_row) as cur:
             product = cur.execute(
                 """
-                SELECT price, description
+                SELECT SKU, price, description
                 FROM product
-                WHERE sku = %(product_sku)s;
+                WHERE SKU = %(product_sku)s;
                 """,
                 {"product_sku": product_sku},
             ).fetchone()
@@ -238,14 +239,15 @@ def product_update(product_sku):
                         """
                         UPDATE product
                         SET price = %(price)s, description = %(description)s
-                        WHERE product_sku = %(product_sku)s;
+                        WHERE SKU = %(product_sku)s;
                         """,
                         {"product_sku": product_sku, "price": price, "description": description},
                     )
                 conn.commit()
-            return redirect(url_for("product_index"))
+            return redirect(url_for("products_index"))
 
     return render_template("products/update.html", product=product)
+
 
 @app.route("/<cust_no>/<order_no>/shop", methods=("GET",))
 def shopping(cust_no, order_no):
@@ -272,7 +274,21 @@ def shopping(cust_no, order_no):
     # return jsonify(products)
     return render_template("products/index_customer.html", products=products, order_no=order_no, cust_no=cust_no)
 
+@app.route("/products/<product_sku>/delete", methods=("POST",))
+def product_delete(product_sku):
+    """Delete the account."""
 
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """ 
+                DELETE FROM product
+                WHERE SKU = %(product_sku)s;
+                """,
+                {"product_sku": product_sku},
+            )
+        conn.commit()
+    return redirect(url_for("products_index"))
 
 """ CUSTOMER ROUTES """
 
@@ -358,6 +374,43 @@ def customer_delete(cust_no):
 
     with pool.connection() as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            order_no = cur.execute(
+                """
+                SELECT order_no
+                FROM orders
+                WHERE cust_no = %(cust_no)s;
+                """,
+                {"cust_no": cust_no},
+            ).fetchall()
+            for nums in order_no:
+                cur.execute(
+                    """ 
+                    DELETE FROM contains
+                    WHERE order_no = %(nums)s;
+                    """,
+                    {"nums": nums[0]},
+                )
+                cur.execute(
+                    """
+                    DELETE FROM pay
+                    WHERE order_no = %(nums)s;
+                    """,
+                    {"nums": nums[0]},
+                )
+                cur.execute(
+                    """
+                    DELETE FROM process
+                    WHERE order_no = %(nums)s;
+                    """,
+                    {"nums": nums[0]},
+                )
+            cur.execute(
+                """ 
+                DELETE FROM orders
+                WHERE cust_no = %(cust_no)s;
+                """,
+                {"cust_no": cust_no},
+            )
             cur.execute(
                 """ 
                 DELETE FROM customer
@@ -366,7 +419,7 @@ def customer_delete(cust_no):
                 {"cust_no": cust_no},
             )
         conn.commit()
-    return redirect(url_for("customer_index"))
+    return redirect(url_for("customers_index"))
 
 
 """ SUPPLIER ROUTES """
@@ -432,6 +485,23 @@ def supplier_register():
             return redirect(url_for("suppliers_index"))
 
     return render_template("suppliers/register.html")   
+
+@app.route("/suppliers/<tin>/delete", methods=("GET", "POST"))
+def supplier_delete(tin):
+    """Delete the account."""
+
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """ 
+                DELETE FROM supplier
+                WHERE tin = %(tin)s;
+                """,
+                {"tin": tin},
+            )
+            delivery_delete(tin)
+        conn.commit()
+    return redirect(url_for("suppliers_index"))
 
 """ ORDER ROUTES """
 
