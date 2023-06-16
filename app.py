@@ -665,6 +665,22 @@ def confirm_payment(cust_no, order_no):
 
     return redirect(url_for("set_customer"))
 
+""" DELIVERY """
+def delivery_delete(tin):
+    """Delete the delivery."""
+
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """ 
+                DELETE FROM delivery
+                WHERE tin = %(tin)s;
+                """,
+                {"tin": tin},
+            )
+        conn.commit()
+    return 
+
 @app.route("/ping", methods=("GET",))
 def ping():
     log.debug("ping!")
