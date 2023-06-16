@@ -13,5 +13,7 @@
     <input type="submit" value="Save">
   </form>
   <hr>
+  <form action="{{ url_for('product_delete', product_sku=product['sku']) }}" method="post">
+    <input class="danger" type="submit" value="Delete" onclick="return confirm('Are you sure?');">
   </form>
 {% endblock %}
