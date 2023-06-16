@@ -2,6 +2,9 @@
 
 {% block header %}
   <h1>{% block title %}Customers{% endblock %}</h1>
+  <ul>
+    <li><a href="{{ url_for('customer_register') }}">New Customer</a>
+  </ul>
 {% endblock %}
 
 {% block content %}

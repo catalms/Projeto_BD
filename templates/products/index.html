@@ -2,6 +2,9 @@
 
 {% block header %}
   <h1>{% block title %}Products{% endblock %}</h1>
+  <ul>
+    <li><a href="{{ url_for('product_register') }}">New Product</a>
+  </ul>
 {% endblock %}
 
 {% block content %}

@@ -159,6 +159,47 @@ def products_index():
     # return jsonify(products)
     return render_template("products/index.html", products=products)
 
+@app.route("/products/register", methods=("POST", "GET"))
+def product_register():
+    """Register a new product."""
+
+    if request.method == "POST":
+        name = request.form["name"]
+        sku = request.form["sku"]
+        ean = request.form["ean"]
+        description = request.form["description"]
+        price = request.form["price"]
+
+        error = None
+
+        if not name:
+            error = "Name is required."
+        elif not sku:
+            error = "SKU is required."
+        elif not description:
+            error = "Description is required."
+        elif not price:
+            error = "Price is required."
+            #if not price.isnumeric():
+            #    error = "Price is required to be numeric."
+
+        if error is not None:
+            flash(error)
+        else:
+            with pool.connection() as conn:
+                with conn.cursor(row_factory=namedtuple_row) as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO product (SKU, name, description, price, ean)
+                        VALUES (%(sku)s, %(name)s, %(description)s, %(price)s, %(ean)s);
+                        """,
+                        {"sku":sku, "name": name, "description": description, "price": price, "ean": ean},
+                    )
+                conn.commit()
+            return redirect(url_for("products_index"))
+
+    return render_template("products/register.html")
+
 @app.route("/products/<product_sku>/update", methods=("GET", "POST"))
 def product_update(product_sku):
     """Update product description and price"""
@@ -276,8 +317,131 @@ def customer_register():
 
     return render_template("customer/register.html")
 
-def account_delete():
+@app.route("/customers/<cust_no>/delete", methods=("GET", "POST"))
+def customer_delete(cust_no):
+    """Delete the customer."""
+
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """ 
+                DELETE FROM customer
+                WHERE cust_no = %(cust_no)s;
+                """,
+                {"cust_no": cust_no},
+            )
+        conn.commit()
+    return redirect(url_for("customer_index"))
     return
+
+
+""" SUPPLIER ROUTES """
+@app.route("/suppliers", methods=("GET",))
+def suppliers_index():
+    """Show all the suppliers, most recent first."""
+
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            suppliers = cur.execute(
+                """
+                SELECT TIN, name, address, SKU, date
+                FROM supplier;
+                """,
+                {},
+            ).fetchall()
+            log.debug(f"Found {cur.rowcount} rows.")
+        
+    # API-like response is returned to clients that request JSON explicitly (e.g., fetch)
+    if (
+        request.accept_mimetypes["application/json"]
+        and not request.accept_mimetypes["text/html"]
+    ):
+        return jsonify(suppliers)
+    # return jsonify(customers)
+    return render_template("suppliers/index.html", suppliers=suppliers)
+    
+@app.route("/suppliers/register", methods=("POST", "GET"))
+def supplier_register():
+    """Register a new supplier."""
+
+    if request.method == "POST":
+        tin = request.form["tin"]
+        name = request.form["name"]
+        address = request.form["address"]
+        sku = request.form["sku"]
+        date = date.today()
+
+        error = None
+
+        if not tin:
+            error = "TIN is required."
+        elif not name:
+            error = "Name is required."
+        elif not address:
+            error = "Address is required."
+        elif not sku:
+            error = "SKU is required."
+
+        if error is not None:
+            flash(error)
+        else:
+            with pool.connection() as conn:
+                with conn.cursor(row_factory=namedtuple_row) as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO supplier (TIN, name, address, SKU, date)
+                        VALUES (%(tin)s, %(name)s, %(address)s, %(sku)s, %(date)s);
+                        """,
+                        {"tin":tin, "name": name, "address": address, "sku": sku, "date": date},
+                    )
+                conn.commit()
+            return redirect(url_for("suppliers_index"))
+
+    return render_template("suppliers/register.html")   
+
+""" ORDER ROUTES """
+@app.route("/order", methods=("GET", "POST"))
+def create_order():
+    if request.method == "POST":
+        order_no = request.form["order_no"]
+        cust_no = request.form["cust_no"]
+        date = date.today()
+
+        sku_1 = request.form["product_1"]
+        qty_1 = request.form["qty_1"]
+        
+        error = None
+
+        if not order_no:
+            error = "Order number is required."
+        elif not cust_no:
+            error = "Customer number is required."
+
+        if error is not None:
+            flash(error)
+        else:
+            with pool.connection() as conn:
+                with conn.cursor(row_factory=namedtuple_row) as cur:
+                    cur.execute("BEGIN;")
+                    cur.execute(
+                        """
+                        INSERT INTO orders (order_no, cust_no, date)
+                        VALUES (%(order_no)s, %(cust_no)s, %(date)s);
+                        """,
+                        {"order_no":order_no, "cust_no": cust_no, "date": date},
+                    )
+
+                    cur.execute(
+                        """
+                        INSERT INTO contains (order_no, SKU, quantity)
+                        VALUES (%(order_no)s, %(sku_1)s, %(qty_1)s);
+                        """,
+                        {"order_no":order_no, "SKU":sku_1, "quantity": qty_1},
+                    )
+                conn.commit()
+
+            return redirect(url_for("order"))
+    return render_template("order/create.html")
 
 @app.route("/ping", methods=("GET",))
 def ping():
