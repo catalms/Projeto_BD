@@ -180,8 +180,8 @@ def product_register():
             error = "Description is required."
         elif not price:
             error = "Price is required."
-            #if not price.isnumeric():
-            #    error = "Price is required to be numeric."
+            if not price.isnumeric():
+                error = "Price is required to be numeric."
 
         if error is not None:
             flash(error)
@@ -247,6 +247,31 @@ def product_update(product_sku):
 
     return render_template("products/update.html", product=product)
 
+@app.route("/<cust_no>/<order_no>/shop", methods=("GET",))
+def shopping(cust_no, order_no):
+    """Show all the products, most recent first."""
+
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            products = cur.execute(
+                """
+                SELECT name, SKU, description, price
+                FROM product
+                ORDER BY name ASC;
+                """,
+                {},
+            ).fetchall()
+            log.debug(f"Found {cur.rowcount} rows.")
+
+    # API-like response is returned to clients that request JSON explicitly (e.g., fetch)
+    if (
+        request.accept_mimetypes["application/json"]
+        and not request.accept_mimetypes["text/html"]
+    ):
+        return jsonify(products)
+    # return jsonify(products)
+    return render_template("products/index_customer.html", products=products, order_no=order_no, cust_no=cust_no)
+
 
 
 """ CUSTOMER ROUTES """
@@ -281,7 +306,7 @@ def customer_register():
     """Register a new customer."""
 
     if request.method == "POST":
-        cust_no = request.form["cust_no"]
+        # cust_no = request.form["cust_no"]
         name = request.form["name"]
         email = request.form["email"]
         phone = request.form["phone"]
@@ -289,9 +314,9 @@ def customer_register():
 
         error = None
 
-        if not cust_no:
-            error = "Customer number is required."
-        elif not name:
+        # if not cust_no:
+        #     error = "Customer number is required."
+        if not name:
             error = "Name is required."
         elif not email:
             error = "Email is required."
@@ -305,6 +330,15 @@ def customer_register():
         else:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=namedtuple_row) as cur:
+                    cust_no = cur.execute(
+                        """
+                        SELECT MAX(cust_no) 
+                        FROM customer
+                        """
+                    ).fetchone()
+
+                    cust_no = cust_no[0] + 1
+
                     cur.execute(
                         """
                         INSERT INTO customer (cust_no, name, email, phone, address)
@@ -312,7 +346,8 @@ def customer_register():
                         """,
                         {"cust_no":cust_no, "name": name, "email": email, "phone": phone, "address": address},
                     )
-                conn.commit()
+            
+            conn.commit()
             return redirect(url_for("customers_index"))
 
     return render_template("customer/register.html")
@@ -332,7 +367,6 @@ def customer_delete(cust_no):
             )
         conn.commit()
     return redirect(url_for("customer_index"))
-    return
 
 
 """ SUPPLIER ROUTES """
@@ -400,10 +434,56 @@ def supplier_register():
     return render_template("suppliers/register.html")   
 
 """ ORDER ROUTES """
+
+@app.route("/order_customer", methods=("GET", "POST"))
+def set_customer():
+    if request.method == "POST":
+        cust_name = request.form["name"]
+
+        error = None
+
+        if not cust_name:
+            error = "Customer name is required."
+
+        if error is not None:
+            flash(error)
+        else:
+            with pool.connection() as conn:
+                with conn.cursor(row_factory=namedtuple_row) as cur:
+                    order_no = cur.execute(
+                        """
+                        SELECT MAX(order_no)
+                        FROM orders;
+                        """
+                    ).fetchone()
+
+                    order_no = order_no[0] + 1
+
+                    cust_no = cur.execute(
+                        """
+                        SELECT cust_no
+                        FROM customer
+                        WHERE name = %(cust_name)s;
+                        """,
+                        {"cust_name": cust_name}
+                    ).fetchone()
+
+                    cur.execute(
+                        """
+                        INSERT INTO orders
+                        values (%(order_no)s, %(cust_no)s, CURRENT_DATE);
+                        """,
+                        {"order_no": order_no, "cust_no": cust_no[0]}
+                    )
+                conn.commit()
+            
+            return redirect(url_for('shopping', order_no=order_no, cust_no=cust_no[0]))
+    return render_template("order/set_customer.html")
+
 @app.route("/order", methods=("GET", "POST"))
 def create_order():
     if request.method == "POST":
-        order_no = request.form["order_no"]
+        # order_no = request.form["order_no"]
         cust_no = request.form["cust_no"]
         date = date.today()
 
@@ -412,9 +492,9 @@ def create_order():
         
         error = None
 
-        if not order_no:
-            error = "Order number is required."
-        elif not cust_no:
+        # if not order_no:
+        #     error = "Order number is required."
+        if not cust_no:
             error = "Customer number is required."
 
         if error is not None:
@@ -422,6 +502,15 @@ def create_order():
         else:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=namedtuple_row) as cur:
+                    order_no = cur.execute(
+                        """
+                        SELECT MAX(order_no)
+                        FROM orders;
+                        """
+                    ).fetchone()
+
+                    order_no = order_no[0] + 1
+
                     cur.execute("BEGIN;")
                     cur.execute(
                         """
@@ -434,7 +523,9 @@ def create_order():
                     cur.execute(
                         """
                         INSERT INTO contains (order_no, SKU, quantity)
-                        VALUES (%(order_no)s, %(sku_1)s, %(qty_1)s);
+                        VALUES (%(order_no)s, %(sku_1)s, 1);
+                        ON CONFLICT (order_no, SKU) DO UPDATE
+                        SET quantity = contains.quantity + 1; 
                         """,
                         {"order_no":order_no, "SKU":sku_1, "quantity": qty_1},
                     )
@@ -442,6 +533,70 @@ def create_order():
 
             return redirect(url_for("order"))
     return render_template("order/create.html")
+
+@app.route("/<cust_no>/<order_no>/<product_sku>", methods=( "POST",))
+def add_to_cart(product_sku, order_no, cust_no):
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                INSERT INTO contains (order_no, SKU, qty)
+                VALUES (%(order_no)s, %(product_sku)s, 1)
+                ON CONFLICT (order_no, SKU) DO UPDATE
+                SET qty = contains.qty + 1; 
+                """,
+                {"order_no": order_no, "product_sku": product_sku},
+            )
+        conn.commit()
+        print('hellpo')
+    return redirect(url_for("shopping", order_no=order_no, cust_no=cust_no))
+
+@app.route("/<cust_no>/<order_no>/checkout", methods=("GET", "POST"))
+def checkout(cust_no, order_no):
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+
+            products_contains = cur.execute(
+                """
+                SELECT *
+                FROM product
+                    JOIN contains USING (sku)
+                WHERE product.sku IN
+                    (SELECT sku
+                    FROM contains
+                    WHERE order_no = %(order_no)s);
+                """,
+                {"order_no": order_no}
+            ).fetchall()
+
+            total = cur.execute(
+                """
+                SELECT SUM(p.price * c.qty) AS total
+                FROM contains c
+                NATURAL JOIN product p
+                WHERE c.order_no = %(order_no)s
+                GROUP BY p.name, qty, price;
+                """,
+                {"order_no": order_no}
+            )
+            conn.commit()
+    
+    return render_template("order/checkout.html", products=products_contains, total=total)
+
+@app.route("/<cust_no>/<order_no>/payed", methods=("GET", "POST"))
+def confirm_payment(cust_no, order_no):
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                INSERT INTO pay
+                values (%(cust_no)s, %(order_no)s);
+                """,
+                {"cust_no": cust_no, "order_no": order_no}
+            )
+            conn.commit()
+
+    return redirect(url_for("order"))
 
 @app.route("/ping", methods=("GET",))
 def ping():

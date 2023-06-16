@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
 {% block header %}
-  <h1>{% block title %}Order{% endblock %}</h1>
+  <h1>{% block title %}New Order{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
   <form method="post">
-    <label for="order_no">Order Number</label>
-    <input name="order_no" id="order_no" type="text" placeholder=" " value="{{ request.form['order_no'] }}" required>
+    <!-- <label for="order_no">Order Number</label>
+    <input name="order_no" id="order_no" type="text" placeholder=" " value="{{ request.form['order_no'] }}" required> -->
     <label for="cust_no">Customer Number</label>
     <input name="cust_no" id="cust_no" type="text" placeholder=" " value="{{ request.form['cust_no'] }}" required>
     <label for="sku_1">Product 1</label>

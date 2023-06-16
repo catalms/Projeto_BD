@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block header %}
+  <h1>{% block title %}Products{% endblock %}</h1>
+  <ul>
+    <li><a href="{{ url_for('checkout', order_no=order_no, cust_no=cust_no) }}">Checkout</a>
+  </ul>
+{% endblock %}
+
+{% block content %}
+  {% for product in products %}
+    <article class="post">
+      <header>
+        <div>
+          <h1>{{ product['name'] }}</h1>
+          <div class="about"> {{ product['description'] }}</div>
+        </div>
+            <form action="{{ url_for('add_to_cart', product_sku=product['sku'], order_no=order_no, cust_no=cust_no) }}" method="post">
+            <input type="submit" value="Add to Cart" >
+            </form>
+    </header>
+      <p class="body">€ {{ product['price'] }}</p>
+    </article>
+    {% if not loop.last %}
+      <hr>
+    {% endif %}
+  {% endfor %}
+{% endblock %}
