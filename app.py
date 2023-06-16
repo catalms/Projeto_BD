@@ -548,7 +548,6 @@ def add_to_cart(product_sku, order_no, cust_no):
                 {"order_no": order_no, "product_sku": product_sku},
             )
         conn.commit()
-        print('hellpo')
     return redirect(url_for("shopping", order_no=order_no, cust_no=cust_no))
 
 @app.route("/<cust_no>/<order_no>/checkout", methods=("GET", "POST"))
@@ -556,15 +555,13 @@ def checkout(cust_no, order_no):
     with pool.connection() as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
 
-            products_contains = cur.execute(
+            products = cur.execute(
                 """
-                SELECT *
-                FROM product
-                    JOIN contains USING (sku)
-                WHERE product.sku IN
-                    (SELECT sku
-                    FROM contains
-                    WHERE order_no = %(order_no)s);
+                SELECT p.name, p.description, p.price, c.qty, SUM(p.price * c.qty) AS subtotal
+                FROM contains c
+                NATURAL JOIN product p
+                WHERE c.order_no = %(order_no)s
+                GROUP BY p.name, qty, price, p.description;
                 """,
                 {"order_no": order_no}
             ).fetchall()
@@ -574,14 +571,14 @@ def checkout(cust_no, order_no):
                 SELECT SUM(p.price * c.qty) AS total
                 FROM contains c
                 NATURAL JOIN product p
-                WHERE c.order_no = %(order_no)s
-                GROUP BY p.name, qty, price;
+                WHERE c.order_no = %(order_no)s;
                 """,
                 {"order_no": order_no}
-            )
+            ).fetchone()
+
             conn.commit()
     
-    return render_template("order/checkout.html", products=products_contains, total=total)
+    return render_template("order/checkout.html", products=products, total=total, cust_no=cust_no, order_no=order_no)
 
 @app.route("/<cust_no>/<order_no>/payed", methods=("GET", "POST"))
 def confirm_payment(cust_no, order_no):
@@ -596,7 +593,7 @@ def confirm_payment(cust_no, order_no):
             )
             conn.commit()
 
-    return redirect(url_for("order"))
+    return redirect(url_for("set_customer"))
 
 @app.route("/ping", methods=("GET",))
 def ping():

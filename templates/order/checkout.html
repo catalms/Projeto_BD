@@ -16,11 +16,14 @@
         </div>
     </header>
       <p class="body">€ {{ product['price'] }}</p>
+      <p class="body">Qty: {{ product['qty'] }}</p>
     </article>
     {% if not loop.last %}
       <hr>
     {% endif %}
   {% endfor %}
   <div></div>
-  <h1> Total: {{ total['total'] }}</h1>
+  <h1> Total: {{ total['total'] }} €</h1>
+  <form action="{{ url_for('confirm_payment', order_no=order_no, cust_no=cust_no) }}" method="post">
+  <input type="submit" value="Checkout" >
 {% endblock %}
