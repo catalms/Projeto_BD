@@ -15,6 +15,8 @@
           <h1>{{ supplier['name'] }}</h1>
           <div class="about"> {{ supplier['TIN'] }}</div>
         </div>
+        <form action="{{ url_for('supplier_delete', tin=supplier['tin']) }}" method="post">
+          <input class="danger" type="submit" value="Delete" onclick="return confirm('Are you sure?');">
       </header>
       <p class="body">Product: {{ supplier['sku'] }}</p>
     </article>
